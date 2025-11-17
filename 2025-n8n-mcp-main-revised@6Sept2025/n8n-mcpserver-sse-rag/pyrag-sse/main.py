@@ -157,7 +157,7 @@ async def sse_endpoint(request: Request):
             while True:
                 try:
                     # Wait for message from queue with timeout
-                    message = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    message = await asyncio.wait_for(queue.get(), timeout=180.0)
                     
                     # Send MCP message as SSE message event
                     yield f"event: message\ndata: {json.dumps(message)}\n\n"
@@ -195,19 +195,36 @@ async def message_endpoint(request: Request):
         session_id = request.query_params.get("session_id")
         if not session_id or session_id not in sse_connections:
             raise HTTPException(status_code=400, detail="Invalid session ID")
-        
+
         # Parse JSON-RPC message
         message = await request.json()
-        
+
         # Process MCP message and get response
-        response = await process_mcp_message(message)
-        
+        # Use longer timeout for tools that process files
+        response = await asyncio.wait_for(
+            process_mcp_message(message),
+            timeout=300.0  # 5 minutes timeout for long operations
+        )
+
         # Send response through SSE if it exists
         if response and session_id in sse_connections:
             await sse_connections[session_id].put(response)
-        
+
         return JSONResponse({"status": "received"})
-        
+
+    except asyncio.TimeoutError:
+        logger.error("MCP message processing timed out")
+        error_response = {
+            "jsonrpc": "2.0",
+            "id": message.get("id"),
+            "error": {
+                "code": -32000,
+                "message": "Operation timed out. The operation is still running in the background."
+            }
+        }
+        if session_id in sse_connections:
+            await sse_connections[session_id].put(error_response)
+        return JSONResponse({"status": "timeout"})
     except Exception as e:
         logger.error(f"Error processing message: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -271,6 +288,17 @@ async def process_mcp_message(message: dict) -> Optional[dict]:
                     }
                 },
                 {
+                    "name": "add_file",
+                    "description": "Add a single file to the RAG database",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {"type": "string", "description": "Path to the file to add"}
+                        },
+                        "required": ["file_path"]
+                    }
+                },
+                {
                     "name": "add_directory",
                     "description": "Add all supported files from a directory to the RAG database",
                     "inputSchema": {
@@ -279,6 +307,17 @@ async def process_mcp_message(message: dict) -> Optional[dict]:
                             "path": {"type": "string", "description": "Path to the directory containing documents"}
                         },
                         "required": ["path"]
+                    }
+                },
+                {
+                    "name": "delete_document",
+                    "description": "Delete a specific document from the RAG database by document name or path",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "document_name": {"type": "string", "description": "Name or path of the document to delete"}
+                        },
+                        "required": ["document_name"]
                     }
                 }
             ]
@@ -295,12 +334,14 @@ async def process_mcp_message(message: dict) -> Optional[dict]:
             
             # Import tool functions
             from app.mcp_server import (
-                add_documentation, 
-                search_documentation, 
-                list_sources, 
-                add_directory
+                add_documentation,
+                search_documentation,
+                list_sources,
+                add_file,
+                add_directory,
+                delete_document
             )
-            
+
             # Call the appropriate tool
             if name == "add_documentation":
                 result = await add_documentation(**arguments)
@@ -308,8 +349,12 @@ async def process_mcp_message(message: dict) -> Optional[dict]:
                 result = await search_documentation(**arguments)
             elif name == "list_sources":
                 result = await list_sources()
+            elif name == "add_file":
+                result = await add_file(**arguments)
             elif name == "add_directory":
                 result = await add_directory(**arguments)
+            elif name == "delete_document":
+                result = await delete_document(**arguments)
             else:
                 return {
                     "jsonrpc": "2.0",

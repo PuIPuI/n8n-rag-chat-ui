@@ -13,12 +13,12 @@ from ...utils.errors import ProcessingError
 class DocumentProcessor(ABC):
     """Base class for document processors."""
     
-    def __init__(self, logger: Optional[logging.Logger] = None, max_chunk_size: int = 1000):
+    def __init__(self, logger: Optional[logging.Logger] = None, max_chunk_size: int = 3000):
         """Initialize the document processor.
-        
+
         Args:
             logger: Logger instance
-            max_chunk_size: Maximum chunk size in characters
+            max_chunk_size: Maximum chunk size in characters (default: 3000 for better semantic coverage)
         """
         self.logger = logger or logging.getLogger(__name__)
         self.max_chunk_size = max_chunk_size

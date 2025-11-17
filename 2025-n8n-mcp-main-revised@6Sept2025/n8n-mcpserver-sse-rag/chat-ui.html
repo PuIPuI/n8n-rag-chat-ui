@@ -46,19 +46,6 @@
     .logo {
       max-width: 350px;
       height: auto;
-      /* ถ้าไม่มีโลโก้ จะแสดงข้อความแทน */
-    }
-
-    /* ใช้เมื่อไม่มีโลโก้ภาพ */
-    .text-logo {
-      font-size: 36px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      background: linear-gradient(45deg, #fff, #f0f0f0);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
     }
 
     .company-name {
@@ -144,10 +131,45 @@
       padding: 20px;
       background: linear-gradient(135deg, #E8F5F5 0%, #D4EDED 100%);
       border-radius: 15px;
+      position: relative;
+    }
+
+    .assistant-content {
+      display: flex;
+      align-items: center;
+      gap: 20px;
     }
 
     .assistant-avatar {
-      margin-right: 20px;
+      flex-shrink: 0;
+    }
+
+    /* Clear History Button */
+    .clear-history-btn {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #C1B194 0%, #B5A688 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 6px rgba(193, 177, 148, 0.3);
+      z-index: 10;
+    }
+
+    .clear-history-btn:hover {
+      background: linear-gradient(135deg, #B5A688 0%, #A99B7C 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(193, 177, 148, 0.4);
+    }
+
+    .clear-history-btn:active {
+      transform: translateY(0);
     }
 
     .gradient-avatar {
@@ -215,10 +237,6 @@
         font-size: 16px;
       }
 
-      .text-logo {
-        font-size: 28px;
-      }
-
       .info-section {
         padding: 20px;
       }
@@ -236,38 +254,23 @@
       }
     }
 
-    /* Loading Animation */
-    .loading {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: #fff;
-      animation: spin 1s ease-in-out infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
     /* n8n Chat Widget Custom Styling */
     #n8n-chat iframe {
       border: none !important;
     }
 
-    /* Chat Widget Header Colors - เปลี่ยนเป็นสีเขียวเหมือน background body */
+    /* Chat Widget Header Colors */
     :root {
       --chat-primary-color: #00C5C9 !important;
       --chat-secondary-color: #00A8AC !important;
-    }  </style>
+    }
+  </style>
 </head>
 <body>
   <div class="container">
     <!-- Header Section -->
     <header class="header">
       <div class="logo-container">
-        <!-- ✅ ใช้โลโก้ภาพจริง -->
         <img src="assets/professional-computer-logo.png" alt="Professional Computer Logo" class="logo">
       </div>
 
@@ -308,13 +311,18 @@
     <section class="chat-section">
       <!-- AI Assistant Header -->
       <div class="assistant-header">
-        <div class="assistant-avatar">
-          <div class="gradient-avatar">AI</div>
+        <div class="assistant-content">
+          <div class="assistant-avatar">
+            <div class="gradient-avatar">AI</div>
+          </div>
+          <div class="assistant-info">
+            <h2 class="chat-title">💬 คุยกับ Professional Computer AI Assistant</h2>
+            <p class="assistant-subtitle">🤖 ผู้ช่วยค้นหาเอกสารคุณภาพอัจฉริยะ</p>
+          </div>
         </div>
-        <div class="assistant-info">
-          <h2 class="chat-title">💬 คุยกับ Professional Computer AI Assistant</h2>
-          <p class="assistant-subtitle">🤖 ผู้ช่วยค้นหาเอกสารคุณภาพอัจฉริยะ</p>
-        </div>
+        <button onclick="clearChatHistory()" class="clear-history-btn" title="ล้างประวัติการสนทนา">
+          🗑️ ล้างประวัติ
+        </button>
       </div>
 
       <div id="n8n-chat"></div>
@@ -330,27 +338,64 @@
   <script type="module">
     import { createChat } from 'https://unpkg.com/@n8n/chat/dist/chat.bundle.es.js';
 
-    // ⚠️ สำคัญ: แก้ไข webhookUrl ให้ตรงกับ n8n instance ของคุณ
-    // รูปแบบ: https://your-n8n-domain.com/webhook/[webhook-id]
-    // หรือ: http://localhost:5678/webhook/[webhook-id] (สำหรับ local development)
+    const WEBHOOK_URL = 'https://complete-restructuring-lenses-eligibility.trycloudflare.com/webhook/bf3a92e6-2915-458b-ac02-c443bedecf26/chat';
 
-    const WEBHOOK_URL = 'https://fancy-salmon-dominant.ngrok-free.app/webhook/bf3a92e6-2915-458b-ac02-c443bedecf26/chat'
-    //'http://localhost:5678/webhook/bf3a92e6-2915-458b-ac02-c443bedecf26';
-    // 👆 แก้ไข URL นี้ให้ตรงกับ n8n instance ของคุณ
+    // ==========================================
+    // 💾 Chat History Storage (localStorage) - Simple Plain Text Version
+    // ==========================================
+    const STORAGE_KEY = 'pc-chat-history-simple';
 
+    // Save chat history (array of plain text strings)
+    function saveChatHistory(messages) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+        console.log('💾 Saved', messages.length, 'messages');
+      } catch (error) {
+        console.error('❌ Error saving:', error);
+      }
+    }
+
+    // Load chat history
+    function loadChatHistory() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const messages = JSON.parse(saved);
+          console.log('📂 Loaded', messages.length, 'messages');
+          return messages;
+        }
+      } catch (error) {
+        console.error('❌ Error loading:', error);
+      }
+      return null;
+    }
+
+    // Clear chat history
+    function clearChatHistory() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        console.log('🗑️ Chat history cleared');
+        location.reload();
+      } catch (error) {
+        console.error('❌ Error clearing:', error);
+      }
+    }
+
+    // Make clearChatHistory available globally
+    window.clearChatHistory = clearChatHistory;
+
+    // Load saved history or use default welcome message
+    const savedHistory = loadChatHistory();
+    const initialMessages = savedHistory || [
+      '👋 สวัสดีครับ! ผมคือ **Professional Computer AI Assistant**\n\n🤖 ผมเป็นผู้ช่วยค้นหาเอกสารคุณภาพอัจฉริยะ พร้อมช่วยคุณหาข้อมูลจากระบบ QP Documents\n\n✨ **ลองถามผมได้เลย:**\n• "หลังได้สัญญาต้องทำอะไรบ้าง"\n• "มีฟอร์มอะไรบ้างใน QP-003"\n• "Cost Sheet คืออะไร"\n\nพร้อมช่วยคุณทุกเมื่อครับ! 😊'
+    ];
+
+    // Initialize n8n chat widget
     createChat({
       webhookUrl: WEBHOOK_URL,
       target: '#n8n-chat',
-
-      // Display Mode - แสดงแบบ fullscreen embedded (ไม่มี floating icon)
       mode: 'fullscreen',
-
-      // Initial Messages
-      initialMessages: [
-        '👋 สวัสดีครับ! ผมคือ **Professional Computer AI Assistant**\n\n🤖 ผมเป็นผู้ช่วยค้นหาเอกสารคุณภาพอัจฉริยะ พร้อมช่วยคุณหาข้อมูลจากระบบ QP Documents\n\n✨ **ลองถามผมได้เลย:**\n• "หลังได้สัญญาต้องทำอะไรบ้าง"\n• "มีฟอร์มอะไรบ้างใน QP-003"\n• "Cost Sheet คืออะไร"\n\nพร้อมช่วยคุณทุกเมื่อครับ! 😊'
-      ],
-
-      // Chat Widget Customization
+      initialMessages: initialMessages,
       i18n: {
         en: {
           title: '👋 สวัสดีครับ!',
@@ -358,12 +403,35 @@
           inputPlaceholder: 'พิมพ์คำถามของคุณ...',
         }
       },
-
     });
 
-    // Console log for debugging
-    console.log('✅ n8n Chat Widget initialized');
-    console.log('📡 Webhook URL:', WEBHOOK_URL);
+    // ==========================================
+    // 🔄 Auto-save messages (plain text only)
+    // ==========================================
+    setTimeout(() => {
+      const chatContainer = document.querySelector('#n8n-chat');
+      if (chatContainer) {
+        const observer = new MutationObserver(() => {
+          // Get all messages as plain text
+          const messages = Array.from(document.querySelectorAll('.chat-message-markdown'))
+            .map(el => el.textContent.trim())
+            .filter(text => text.length > 0);
+
+          if (messages.length > 0) {
+            saveChatHistory(messages);
+          }
+        });
+
+        observer.observe(chatContainer, {
+          childList: true,
+          subtree: true
+        });
+
+        console.log('👀 Chat observer started - saving plain text messages');
+      }
+    }, 1000);
+
+    console.log('✅ Chat initialized');
   </script>
 </body>
 </html>

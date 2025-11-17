@@ -342,9 +342,48 @@ class QdrantService(StorageService):
             # Convert filters to Qdrant filter
             qdrant_filter = None
             if filters:
-                # TODO: Implement filter conversion
-                pass
-            
+                # Implement filter conversion
+                conditions = []
+
+                # Handle source/document filter
+                if "source" in filters:
+                    source_value = filters["source"]
+                    conditions.append(
+                        qdrant_models.FieldCondition(
+                            key="source",
+                            match=qdrant_models.MatchValue(value=source_value)
+                        )
+                    )
+                    self.logger.debug(f"Added source filter: {source_value}")
+
+                # Handle document_id filter (e.g., "QP-003")
+                if "document_id" in filters:
+                    doc_id = filters["document_id"]
+                    # Match documents where source contains the document_id
+                    conditions.append(
+                        qdrant_models.FieldCondition(
+                            key="source",
+                            match=qdrant_models.MatchText(text=doc_id)
+                        )
+                    )
+                    self.logger.debug(f"Added document_id filter: {doc_id}")
+
+                # Handle title filter
+                if "title" in filters:
+                    title_value = filters["title"]
+                    conditions.append(
+                        qdrant_models.FieldCondition(
+                            key="title",
+                            match=qdrant_models.MatchText(text=title_value)
+                        )
+                    )
+                    self.logger.debug(f"Added title filter: {title_value}")
+
+                # Create filter if we have conditions
+                if conditions:
+                    qdrant_filter = qdrant_models.Filter(must=conditions)
+                    self.logger.info(f"Created filter with {len(conditions)} condition(s)")
+
             # Set score threshold
             score_threshold = min_score or 0.0
             
@@ -452,13 +491,13 @@ class QdrantService(StorageService):
     
     async def delete_documents(self, filter_conditions: Dict[str, Any]) -> int:
         """Delete documents matching filter from Qdrant.
-        
+
         Args:
             filter_conditions: Filter conditions
-            
+
         Returns:
             Number of deleted documents
-            
+
         Raises:
             StorageError: If deletion fails
         """
@@ -468,7 +507,7 @@ class QdrantService(StorageService):
             if filter_conditions:
                 # TODO: Implement filter conversion
                 pass
-            
+
             # Delete points
             result = self.client.delete(
                 collection_name=self.collection_name,
@@ -477,11 +516,52 @@ class QdrantService(StorageService):
                 ),
                 wait=True
             )
-            
+
             self.logger.info(f"Deleted documents from Qdrant")
             return 0  # Qdrant doesn't return count in current version
         except Exception as e:
             error_msg = f"Failed to delete documents from Qdrant: {str(e)}"
+            self.logger.error(error_msg)
+            raise StorageError(error_msg)
+
+    async def delete_by_source(self, source: str) -> int:
+        """Delete all documents with a specific source from Qdrant.
+
+        Args:
+            source: Source identifier to delete
+
+        Returns:
+            Number of deleted documents
+
+        Raises:
+            StorageError: If deletion fails
+        """
+        try:
+            self.logger.info(f"Deleting documents with source: {source}")
+
+            # Create filter for source field
+            qdrant_filter = qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="source",
+                        match=qdrant_models.MatchValue(value=source)
+                    )
+                ]
+            )
+
+            # Delete points matching the filter
+            result = self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=qdrant_models.FilterSelector(
+                    filter=qdrant_filter
+                ),
+                wait=True
+            )
+
+            self.logger.info(f"Deleted documents with source '{source}' from Qdrant")
+            return 1  # Return 1 to indicate success (Qdrant doesn't return count)
+        except Exception as e:
+            error_msg = f"Failed to delete documents by source from Qdrant: {str(e)}"
             self.logger.error(error_msg)
             raise StorageError(error_msg)
 

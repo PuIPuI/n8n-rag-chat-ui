@@ -68,22 +68,29 @@ class OllamaProvider(EmbeddingProvider):
         super().__init__(model, logger)
         
         import os
+        import httpx
         self.base_url = base_url or os.environ.get("OLLAMA_URL", "http://localhost:11434")
-        
+
         # Initialize client
         self.client = ollama.Client(host=self.base_url)
-        
+
+        # Create shared httpx client for async requests with longer timeout
+        self.http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(120.0, connect=10.0),  # 120s read, 10s connect
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
+        )
+
         self.logger.info(f"Initialized Ollama provider with URL: {self.base_url}, model: {self.model}")
     
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate an embedding using Ollama.
-        
+
         Args:
             text: Text to generate embedding for
-            
+
         Returns:
             Embedding vector
-            
+
         Raises:
             EmbeddingError: If embedding generation fails
         """
@@ -91,22 +98,25 @@ class OllamaProvider(EmbeddingProvider):
             # Truncate text if too long
             text_preview = text[:50] + "..." if len(text) > 50 else text
             self.logger.debug(f"Generating embedding for: {text_preview}")
-            
-            # Convert to async using asyncio.to_thread
-            import asyncio
-            response = await asyncio.to_thread(
-                self.client.embeddings,
-                model=self.model,
-                prompt=text
+
+            # Use shared httpx client for true concurrent requests
+            response = await self.http_client.post(
+                f"{self.base_url}/api/embeddings",
+                json={
+                    "model": self.model,
+                    "prompt": text
+                }
             )
-            
-            embedding = response.get("embedding", [])
-            
+            response.raise_for_status()
+            data = response.json()
+
+            embedding = data.get("embedding", [])
+
             if not embedding:
                 raise EmbeddingError("Ollama returned empty embedding")
-            
+
             self.logger.debug(f"Generated embedding with size: {len(embedding)}")
-            
+
             return embedding
         except Exception as e:
             error_msg = f"Failed to generate embedding with Ollama: {str(e)}"

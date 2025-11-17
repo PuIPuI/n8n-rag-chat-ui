@@ -1,6 +1,7 @@
 """
 MCP Server implementation with SSE transport for PyRAGDoc
 """
+import asyncio
 import json
 import logging
 import os
@@ -83,21 +84,62 @@ async def add_documentation(url: str) -> str:
         return error_msg
 
 @mcp_server.tool()
-async def search_documentation(query: str, limit: int = 5) -> str:
-    """Search through stored documentation
-    
+async def search_documentation(
+    query: str,
+    limit: int = 5,
+    document_id: str = None
+) -> str:
+    """Search through stored documentation with optional filtering
+
     Args:
         query: Search query
         limit: Maximum number of results to return (default: 5)
+        document_id: Optional document ID to filter by (e.g., "QP-003", "QP-001")
     """
     try:
-        logger.info(f"Searching documentation with query: {query}")
-        
+        # Auto-adjust limit based on query keywords and context
+        # NOTE: This is a safety net for when LLM doesn't follow system prompt properly.
+        # With chunk_size=3000, most documents have 10-20 chunks, so limit=20 covers most cases.
+        # Main fix was increasing chunk_size from 1000→3000 (reduces chunks by 65%).
+        original_limit = limit
+
+        # Comprehensive query keywords
+        comprehensive_keywords = [
+            "ทั้งหมด", "ครบถ้วน", "มีอะไรบ้าง", "ครอบคลุม", "ประกอบด้วย",
+            "all", "complete", "comprehensive", "entire", "whole"
+        ]
+
+        # If query is too short (likely stripped), assume comprehensive for procedure queries
+        query_lower = query.lower()
+        query_words = query.split()
+        is_short_query = len(query_words) <= 6  # Increased from 3 to 6 to catch more cases
+        is_procedure_query = any(word in query_lower for word in ["ขั้นตอน", "procedure", "step"])
+
+        # Auto-adjust if:
+        # 1. Contains comprehensive keywords, OR
+        # 2. Procedure query with reasonable length (likely comprehensive intent)
+        should_adjust = (
+            any(keyword in query_lower for keyword in comprehensive_keywords) or
+            (is_short_query and is_procedure_query and limit < 15)
+        )
+
+        if should_adjust:
+            limit = max(limit, 20)  # Force minimum 20 for comprehensive queries
+            logger.info(f"Auto-adjusted limit from {original_limit} to {limit} (query: '{query}', is_short: {is_short_query}, is_procedure: {is_procedure_query})")
+
+        logger.info(f"Searching documentation with query: {query}, limit: {limit}, document_id: {document_id}")
+
         # Generate embedding for query
         embedding = await embedding_service.generate_embedding(query)
-        
-        # Search for similar documents
-        results = await storage_service.search(embedding, limit)
+
+        # Prepare filters if document_id is provided
+        filters = None
+        if document_id:
+            filters = {"document_id": document_id}
+            logger.info(f"Applying document filter: {document_id}")
+
+        # Search for similar documents with optional filtering
+        results = await storage_service.search(embedding, limit, filters=filters)
         
         if not results or len(results) == 0:
             return "No results found for your query."
@@ -155,15 +197,130 @@ async def list_sources() -> str:
         return error_msg
 
 @mcp_server.tool()
+async def delete_document(document_name: str) -> str:
+    """Delete a specific document from the RAG database by document name or path
+
+    Args:
+        document_name: Name or path of the document to delete
+    """
+    try:
+        logger.info(f"Deleting document: {document_name}")
+
+        # Get all sources to find matching documents
+        sources = await storage_service.list_sources()
+
+        if not sources or len(sources) == 0:
+            return "No documents found in the database."
+
+        # Find matching sources
+        matching_sources = []
+        for source in sources:
+            # Check if document_name matches exactly or is contained in source
+            if document_name in source or source.endswith(document_name):
+                matching_sources.append(source)
+
+        if not matching_sources:
+            return f"No documents found matching '{document_name}'. Available sources: {', '.join(sources[:5])}"
+
+        # Delete matching documents
+        deleted_count = 0
+        for source in matching_sources:
+            try:
+                # Delete from storage by source
+                await storage_service.delete_by_source(source)
+                deleted_count += 1
+                logger.info(f"Successfully deleted document: {source}")
+            except Exception as e:
+                logger.error(f"Error deleting {source}: {str(e)}")
+
+        if deleted_count > 0:
+            summary = f"Successfully deleted {deleted_count} document(s):\n"
+            for source in matching_sources:
+                summary += f"- {source}\n"
+            return summary
+        else:
+            return f"Failed to delete documents matching '{document_name}'"
+
+    except Exception as e:
+        error_msg = f"Error deleting document: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return error_msg
+
+@mcp_server.tool()
+async def add_file(file_path: str) -> str:
+    """Add a single file to the RAG database
+
+    Args:
+        file_path: Path to the file to add
+    """
+    try:
+        logger.info(f"Adding file: {file_path}")
+
+        # Check if file exists
+        if not os.path.isfile(file_path):
+            return f"Error: '{file_path}' is not a file or doesn't exist"
+
+        # Create processors
+        pdf_processor = PDFProcessor(logger=logger)
+        text_processor = TextProcessor(logger=logger)
+
+        # Process file
+        chunks = None
+        if pdf_processor.can_process(file_path):
+            logger.info(f"Processing PDF file: {file_path}")
+            chunks = await pdf_processor.process_content(file_path)
+        elif text_processor.can_process(file_path):
+            logger.info(f"Processing text file: {file_path}")
+            chunks = await text_processor.process_content(file_path)
+        else:
+            return f"Error: Unsupported file type for '{file_path}'. Supported types: .pdf, .txt, .md"
+
+        if not chunks or len(chunks) == 0:
+            return f"Error: No content could be extracted from '{file_path}'"
+
+        # Generate embeddings in batches (OpenAI can handle concurrent requests)
+        embeddings = []
+        batch_size = 10  # Process 10 chunks at a time
+
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            logger.info(f"Generating embeddings for batch {i//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size}")
+
+            # Process batch concurrently
+            batch_embeddings = await asyncio.gather(*[
+                embedding_service.generate_embedding(chunk.text)
+                for chunk in batch
+            ])
+            embeddings.extend(batch_embeddings)
+
+            # Log progress
+            logger.info(f"Progress: {len(embeddings)}/{len(chunks)} embeddings generated")
+
+        # Store documents
+        await storage_service.add_documents(embeddings, chunks)
+
+        summary = f"Successfully added file to RAG database:\n"
+        summary += f"File: {file_path}\n"
+        summary += f"Chunks created: {len(chunks)}\n"
+
+        logger.info(f"Successfully processed file: {file_path} ({len(chunks)} chunks)")
+        return summary
+
+    except Exception as e:
+        error_msg = f"Error adding file: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return error_msg
+
+@mcp_server.tool()
 async def add_directory(path: str) -> str:
     """Add all supported files from a directory to the RAG database
-    
+
     Args:
         path: Path to the directory containing documents
     """
     try:
         logger.info(f"Adding documentation from directory: {path}")
-        
+
         # Check if directory exists
         if not os.path.isdir(path):
             return f"Error: '{path}' is not a directory or doesn't exist"
@@ -184,11 +341,20 @@ async def add_directory(path: str) -> str:
         processed_files = []
         failed_files = []
         
+        # Count total files first
+        total_files = sum(1 for root, _, files in os.walk(path) for _ in files)
+        processed_count = 0
+
         # Process files
         for root, _, files in os.walk(path):
             for filename in files:
                 file_path = os.path.join(root, filename)
-                
+                processed_count += 1
+
+                # Log progress every 5 files
+                if processed_count % 5 == 0:
+                    logger.info(f"Progress: {processed_count}/{total_files} files processed")
+
                 try:
                     # Check supported file types
                     chunks = None
@@ -213,14 +379,21 @@ async def add_directory(path: str) -> str:
                     for chunk in chunks:
                         embedding = await embedding_service.generate_embedding(chunk.text)
                         embeddings.append(embedding)
-                    
+
+                        # Yield control every 10 embeddings to prevent blocking
+                        if len(embeddings) % 10 == 0:
+                            await asyncio.sleep(0)  # Yield to event loop
+
                     # Store documents
                     await storage_service.add_documents(embeddings, chunks)
-                    
+
                     processed_files.append(file_path)
                     stats["processed"] += 1
                     stats["total_chunks"] += len(chunks)
                     logger.info(f"Successfully processed {file_path}: {len(chunks)} chunks")
+
+                    # Yield control after each file
+                    await asyncio.sleep(0)
                     
                 except Exception as e:
                     logger.error(f"Error processing file {file_path}: {str(e)}")

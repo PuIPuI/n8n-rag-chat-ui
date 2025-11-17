@@ -33,9 +33,13 @@ ENV/
 *.swo
 *~
 
-# Environment
-##.env
+# Environment Variables (CRITICAL - NEVER COMMIT!)
+.env
+.env.*
+!.env.example
+!.env.railway.example
 .env.local
+.env.production
 
 # Logs
 *.log
@@ -55,3 +59,8 @@ htmlcov/
 
 # Qdrant
 qdrant_data/
+
+# Sensitive Company Documents (QP Documents)
+# WARNING: QP documents contain confidential company information
+QP-*.md
+*.pdf
