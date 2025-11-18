@@ -1,0 +1,456 @@
+{
+  "name": "demo_multi_agent_Cloudmcpserver_sse_rag",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "=Hi there! 👋\nMy name is Puiichot. How can I assist you today?",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1040,
+        240
+      ],
+      "id": "9cedc6f7-1898-4cca-a5f4-f56144e06d11",
+      "name": "When chat message received",
+      "webhookId": "bf3a92e6-2915-458b-ac02-c443bedecf26"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        496
+      ],
+      "id": "a4da8f15-2095-409b-84e7-d3dd977f93ea",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2966067a-7bb6-4316-8ad9-2b7681c7e0b9",
+              "leftValue": "={{$json[\"output\"]}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "803ce947-d968-4eb5-ae57-03f4d8596ec8",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=รับ output จาก RAG Agent:\n\n{{ $json.output }}\n\n---\n\nงานของคุณ: จัดรูปแบบคำตอบข้างต้นให้อ่านง่ายสำหรับ end user\n\n⚠️ กฎสำคัญ:\n- ดึงคำตอบจริงจาก output ข้างต้นมา format เป็น Markdown\n- กรอง tool calls, metadata, technical details ออกทั้งหมด\n- ใช้รูปแบบ: หัวข้อ (##, ###), รายการ (1. 2. 3.), ตัวหนา (**bold**)\n- ห้ามอธิบายวิธีการ format - ต้อง format คำตอบจริงทันที\n- ห้าม return JSON\n- ห้ามบอกว่า \"รอ input\" หรือ \"โปรดส่งมา\"",
+        "options": {
+          "systemMessage": "=SYSTEM MESSAGE: DATA ENGINEER - OUTPUT FORMATTER (COMPACT v3.1)\n\nคุณคือ Data Engineer Agent ที่รับ output จาก RAG Agent แล้วจัดรูปแบบคำตอบให้ผู้อ่านปลายทางอ่านง่ายขึ้น\n\nหน้าที่ของคุณ:\n- ใช้ “คำตอบจริง” จาก RAG Agent เท่านั้น\n- จัดโครงสร้าง/หัวข้อ/ลำดับให้อ่านง่าย\n- แปลงภาษาทางเทคนิคให้เป็นภาษาที่ผู้ใช้ทั่วไปเข้าใจ\n\n═══════════════════════════════════════════════════════════════════\n🎯 GOLDEN RULES\n═══════════════════════════════════════════════════════════════════\n\n1) ห้ามอธิบายวิธีการจัดรูปแบบของตัวเอง  \n   - ห้ามพูดถึง “ขั้นตอนการจัดรูปแบบข้อมูล”, “ตัวอย่างการจัดรูปแบบ” หรือการทำงานของ Agent เอง\n\n2) ห้ามเพิ่ม/แต่งข้อมูลใหม่  \n   - สรุปและจัดกลุ่มได้ แต่เนื้อหาต้องมาจาก RAG Agent เท่านั้น  \n   - ห้ามสร้างฟอร์ม, ขั้นตอน, หรือเนื้อหาเพิ่มจากจินตนาการ\n\n3) ห้ามตอบเป็น JSON หรือ code block  \n   - ห้ามใช้ ```...``` ล้อมคำตอบ  \n   - ตอบเป็น Markdown ข้อความปกติ ใช้หัวข้อ (##, ###), ตัวหนา, bullet/ลำดับเลขได้\n\n4) ต้องกรอง metadata ทางเทคนิคออก  \n   - ไม่แสดง tool calls, scores, paths, logs, raw JSON  \n   - แสดงเฉพาะเนื้อหาคำตอบที่ผู้ใช้ต้องรู้\n\n5) ถ้าเป็นกรณี error / ไม่พบข้อมูล  \n   - แจ้งผู้ใช้ว่า “ไม่พบข้อมูลในระบบ” หรือ “เกิดข้อผิดพลาดทางเทคนิค” อย่างสุภาพ  \n   - ห้ามเดาเนื้อหาของเอกสารแทนระบบ\n\n═══════════════════════════════════════════════════════════════════\n🧱 รูปแบบ Output ที่ต้องการ\n═══════════════════════════════════════════════════════════════════\n\n**Input:** ข้อความจาก RAG Agent (อาจมี Category, document reference, metadata ปน)\n\n**Output:** คำตอบแบบ Markdown (ไม่ใช้ code block) โครงสร้างประมาณนี้:\n\n## [หัวข้อหลักของคำตอบ]\n\n[สรุปใจความสำคัญ 1–2 ประโยค ตรงประเด็นที่ถาม]\n\n### [หัวข้อย่อยที่เหมาะสม เช่น “ขั้นตอนการดำเนินการ” หรือ “รายการฟอร์ม”]:\n\n1. **[รายการ/ขั้นตอนที่ 1]**\n   - รายละเอียดสำคัญ (ถ้ามีใน RAG output)\n\n2. **[รายการ/ขั้นตอนที่ 2]**\n   - รายละเอียดสำคัญ\n\n...\n\n---\n*📚 แหล่งข้อมูล: [ข้อความระบุที่มาข้อมูล]*\n\n\nแนวทางตั้งหัวข้อ:\n- ถ้ามีหัวข้อ/คำถามจากผู้ใช้ในข้อความ RAG → นำมาใช้เป็นหัวข้อหลัก  \n- ถ้าไม่มี → ตั้งหัวข้อสั้น ๆ จากใจความ เช่น:\n  - \"การจัดทำข้อเสนอโครงการ\"\n  - \"ฟอร์มที่ใช้ในเอกสาร QP-003\"\n  - \"ขั้นตอนหลังการส่งมอบงาน\"\n\n═══════════════════════════════════════════════════════════════════\n📚 การระบุแหล่งข้อมูล (Footer)\n═══════════════════════════════════════════════════════════════════\n\n1) มองหาชื่อเอกสาร QP ในข้อความ RAG Agent เช่น QP-001, QP-002, QP-003, QP-009  \n2) ถ้าพบหลายตัว → รวมใน footer เช่น:  \n   - `*📚 แหล่งข้อมูล: ระบบเอกสารคุณภาพ - อ้างอิงจาก QP-001, QP-003, QP-009*`  \n3) ถ้าไม่พบชื่อ QP ใดเลย → ใช้ข้อความทั่วไป:  \n   - `*📚 แหล่งข้อมูล: ระบบเอกสารคุณภาพ (QP Documents)*`\n\n═══════════════════════════════════════════════════════════════════\n⚙️ แนวทางจัดการเนื้อหา\n═══════════════════════════════════════════════════════════════════\n\n- ดึงเฉพาะ “คำตอบจริง” จาก RAG Agent มาจัดลำดับ/แบ่งหัวข้อ  \n- รักษาจำนวนขั้นตอน/รายการให้ตรงกับที่ RAG Agent ให้มา  \n- ใช้ภาษาไทยทางการ อ่านง่าย กระชับ  \n- ไม่ต้องแสดง Category ตรง ๆ แต่ใช้ผลของมันในการตัดสินใจตอบ:\n  - ถ้า Success → สรุปเนื้อหาตามปกติ\n  - ถ้า Error / Not Found → แจ้งผู้ใช้ว่าไม่พบข้อมูลหรือเกิดข้อผิดพลาด\n\n═══════════════════════════════════════════════════════════════════\n✅ สรุปหน้าที่\n═══════════════════════════════════════════════════════════════════\n\n- DO: สรุปและจัดรูปแบบคำตอบจาก RAG Agent ให้สวย อ่านง่าย เข้าใจเร็ว  \n- DO: ระบุแหล่งข้อมูลท้ายคำตอบให้เหมาะสม  \n\n- DON’T: อธิบายวิธี format  \n- DON’T: ใช้ JSON หรือ code block  \n- DON’T: แต่ง/เดาเนื้อหาเพิ่มเติมจากสิ่งที่ RAG Agent ส่งมา\n\n═══════════════════════════════════════════════════════════════════\nEND OF SYSTEM MESSAGE\n═══════════════════════════════════════════════════════════════════\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        736,
+        320
+      ],
+      "id": "2f4131aa-fe57-448c-9710-a5cfecd36a07",
+      "name": "Data Engineer Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\n\n// เก็บคำถามแรกไว้สำหรับอ้างอิง (ถ้าจำเป็น)\nif (!staticData.first_question) {\n    staticData.first_question = {\n        question: $json[\"chatInput\"],\n        sessionId: $json[\"userId\"] || \"default-session\",\n        startTime: new Date().toISOString()\n    };\n}\n\n\n// ส่งออกคำถามปัจจุบัน (ไม่ใช่คำถามแรก!)\nreturn [{\n    // ส่งคำถามปัจจุบัน\n    input: $json[\"chatInput\"],  // ← เปลี่ยนตรงนี้!\n    \n    // เก็บข้อมูล session ไว้ (optional)\n    sessionId: staticData.first_question.sessionId,\n    \n    // เก็บคำถามแรกไว้อ้างอิง (ถ้าต้องการ)\n    _metadata: {\n        firstQuestion: staticData.first_question.question,\n        sessionStartTime: staticData.first_question.startTime\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        240
+      ],
+      "id": "2ada3a3f-721e-430f-9fc9-ca82e166c7a4",
+      "name": "Question memorizer"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-oss-120b",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-oss-120b"
+        },
+        "options": {
+          "maxTokens": 8000,
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -272,
+        448
+      ],
+      "id": "133a9a93-5897-4f9b-90f9-e5efe3764430",
+      "name": "OpenAI Chat Model by OpenRouter",
+      "credentials": {
+        "openAiApi": {
+          "id": "LIdsm65luZJXEo3W",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        688,
+        512
+      ],
+      "id": "c9f0920c-3eba-40d5-8a4e-77ffe5b854f2",
+      "name": "OpenAI Chat Model by OpenRouter-1",
+      "credentials": {
+        "openAiApi": {
+          "id": "LIdsm65luZJXEo3W",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "List all documentation sources currently stored",
+        "connectionType": "sse",
+        "operation": "executeTool",
+        "toolName": "list_sources"
+      },
+      "type": "n8n-nodes-mcp.mcpClientTool",
+      "typeVersion": 1,
+      "position": [
+        80,
+        480
+      ],
+      "id": "7bbbbff0-3b9e-4afc-9a25-c86a59bba441",
+      "name": "list_sources",
+      "credentials": {
+        "mcpClientSseApi": {
+          "id": "80s6pBJuIiOoeh2Y",
+          "name": "MCP Client (SSE) to MCP Server for RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Add a single file to the RAG database",
+        "connectionType": "sse",
+        "operation": "executeTool",
+        "toolName": "add_file",
+        "toolParameters": "={{ (function() {\n  const paramsString = $fromAI('Tool_Parameters');\n  \n  // Default path\n  const defaultParams = {\n    file_path: \"/home/user/document.md\"\n  };\n  \n  if (!paramsString) {\n    return defaultParams;\n  }\n  \n  try {\n    // ลองแปลง JSON ก่อน\n    const params = JSON.parse(paramsString);\n    return {\n      file_path: params.file_path || params.path || params.file || defaultParams.file_path\n    };\n  } catch (e) {\n    // ถ้าแปลง JSON ไม่ได้ ถือว่าเป็น path string โดยตรง\n    if (typeof paramsString === 'string' && paramsString.trim().length > 0) {\n      return {\n        file_path: paramsString.trim()\n      };\n    }\n    return defaultParams;\n  }\n})() }}"
+      },
+      "type": "n8n-nodes-mcp.mcpClientTool",
+      "typeVersion": 1,
+      "position": [
+        288,
+        480
+      ],
+      "id": "84768135-3457-45bc-9082-4f7af3e0d582",
+      "name": "add_file",
+      "credentials": {
+        "mcpClientSseApi": {
+          "id": "80s6pBJuIiOoeh2Y",
+          "name": "MCP Client (SSE) to MCP Server for RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Add all supported files from a directory to the RAG database",
+        "connectionType": "sse",
+        "operation": "executeTool",
+        "toolName": "add_directory",
+        "toolParameters": "={{ (function() {\n  const paramsString = $fromAI('Tool_Parameters');\n  \n  // Default path\n  const defaultParams = {\n    path: \"/home/user/documents\"\n  };\n  \n  if (!paramsString) {\n    return defaultParams;\n  }\n  \n  try {\n    // ลองแปลง JSON ก่อน\n    const params = JSON.parse(paramsString);\n    return {\n      path: params.path || defaultParams.path\n    };\n  } catch (e) {\n    // ถ้าแปลง JSON ไม่ได้ ถือว่าเป็น path string โดยตรง\n    if (typeof paramsString === 'string' && paramsString.trim().length > 0) {\n      return {\n        path: paramsString.trim()\n      };\n    }\n    return defaultParams;\n  }\n})() }}"
+      },
+      "type": "n8n-nodes-mcp.mcpClientTool",
+      "typeVersion": 1,
+      "position": [
+        192,
+        480
+      ],
+      "id": "8955f70c-8ec4-4c6b-833c-8aab985c283c",
+      "name": "add_directory",
+      "credentials": {
+        "mcpClientSseApi": {
+          "id": "80s6pBJuIiOoeh2Y",
+          "name": "MCP Client (SSE) to MCP Server for RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Search through stored documentation with optional document filtering",
+        "connectionType": "sse",
+        "operation": "executeTool",
+        "toolName": "search_documentation",
+        "toolParameters": "={{ (function() {\n  const paramsString = $fromAI('Tool_Parameters');\n  \n  // Default parameters\n  const defaultParams = {\n    query: \"search term\",\n    limit: 25,\n    document_id: null\n  };\n  \n  if (!paramsString) {\n    return defaultParams;\n  }\n  \n  try {\n    // ลองแปลง JSON ก่อน\n    const params = JSON.parse(paramsString);\n    const result = {\n      query: params.query || params.search || params.keyword || defaultParams.query,\n      limit: params.limit || params.max || params.count || defaultParams.limit\n    };\n    \n    // เพิ่ม document_id ถ้ามี\n    if (params.document_id || params.doc_id || params.document) {\n      result.document_id = params.document_id || params.doc_id || params.document;\n    }\n    \n    return result;\n  } catch (e) {\n    // ถ้าแปลง JSON ไม่ได้ ถือว่าเป็น search string โดยตรง\n    if (typeof paramsString === 'string' && paramsString.trim().length > 0) {\n      return {\n        query: paramsString.trim(),\n        limit: defaultParams.limit,\n        document_id: null\n      };\n    }\n    return defaultParams;\n  }\n})() }}"
+      },
+      "type": "n8n-nodes-mcp.mcpClientTool",
+      "typeVersion": 1,
+      "position": [
+        400,
+        448
+      ],
+      "id": "8bb59f72-54b6-4c38-a72d-8150266f8e50",
+      "name": "search_documentation",
+      "credentials": {
+        "mcpClientSseApi": {
+          "id": "80s6pBJuIiOoeh2Y",
+          "name": "MCP Client (SSE) to MCP Server for RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Delete a specific document from the RAG database by document name or path",
+        "connectionType": "sse",
+        "operation": "executeTool",
+        "toolName": "delete_document",
+        "toolParameters": "={{ (function() {\n  const paramsString = $fromAI('Tool_Parameters');\n  \n  // Default parameters\n  const defaultParams = {\n    document_name: \"\"\n  };\n  \n  if (!paramsString) {\n    return defaultParams;\n  }\n  \n  try {\n    // ลองแปลง JSON ก่อน\n    const params = JSON.parse(paramsString);\n    return {\n      document_name: params.document_name || params.name || params.doc || params.file || defaultParams.document_name\n    };\n  } catch (e) {\n    // ถ้าแปลง JSON ไม่ได้ ถือว่าเป็น document name โดยตรง\n    if (typeof paramsString === 'string' && paramsString.trim().length > 0) {\n      return {\n        document_name: paramsString.trim()\n      };\n    }\n    return defaultParams;\n  }\n})() }}"
+      },
+      "type": "n8n-nodes-mcp.mcpClientTool",
+      "typeVersion": 1,
+      "position": [
+        528,
+        384
+      ],
+      "id": "e38919f4-939b-41cc-915f-926661844c6c",
+      "name": "delete_document",
+      "credentials": {
+        "mcpClientSseApi": {
+          "id": "80s6pBJuIiOoeh2Y",
+          "name": "MCP Client (SSE) to MCP Server for RAG"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "=SYSTEM MESSAGE: RAG KNOWLEDGE ASSISTANT (COMPACT MODE v3.1)\n\nคุณคือ RAG Knowledge Assistant ของบริษัท Professional Computer Co., Ltd.\nหน้าที่: ใช้ RAG Tools เพื่อค้นหาและอธิบายเนื้อหาในเอกสารคุณภาพ (QP Documents) อย่างถูกต้อง ชัดเจน และไม่เดา\n\n═══════════════════════════════════════════════════════════════════\n🎯 GOLDEN RULES\n═══════════════════════════════════════════════════════════════════\n\n1) ต้องเรียกใช้ tool ทุกครั้งก่อนตอบ (search_documentation / list_sources / add_file / add_directory / delete_document)\n2) ห้ามตอบโดยใช้ความรู้ภายนอกเอกสาร ห้ามเดา ห้ามสมมติ\n3) ถ้าคำถามระบุเอกสาร (เช่น QP-001, QP-003) → ต้องใส่ document_id ให้ตรง\n4) ถ้าคำถามเกี่ยวกับ “form/แบบฟอร์ม” → ต้องใช้ query:\n   - \"form แบบฟอร์ม FMK FMS FPCC FLC\"\n   - limit=20\n   - ใส่ document_id ถ้าระบุ QP ไว้\n5) ห้ามเปลี่ยน intent ของคำถาม:\n   - ถาม “วัตถุประสงค์” → ตอบ “วัตถุประสงค์”\n   - ถาม “ขั้นตอน” → ตอบ “ขั้นตอน”\n   - ถาม “form/แบบฟอร์ม” → ตอบ “ฟอร์มที่เกี่ยวข้อง”\n\n═══════════════════════════════════════════════════════════════════\n⚙️ Tool Selection (เลือก Tool ให้ตรงคำถาม)\n═══════════════════════════════════════════════════════════════════\n\nใช้กฎง่าย ๆ ดังนี้:\n\n1) search_documentation\n   ใช้เมื่อคำถามเกี่ยวกับ:\n   - ความหมาย, วัตถุประสงค์, ขั้นตอน, เนื้อหา, scope\n   - มีคำว่า: \"คืออะไร\" / \"วัตถุประสงค์\" / \"objective\" / \"purpose\" /\n     \"ขั้นตอน\" / \"procedure\" / \"วิธีการ\" / \"ครอบคลุม\" / \"ประกอบด้วย\" / \"QP-\"\n\n2) list_sources\n   ใช้เมื่อถามถึง “รายการ/รายชื่อแหล่งข้อมูล”\n   - มีคำว่า: \"มีอะไรบ้าง\" / \"รายการ\" / \"list\" / \"ทั้งหมด\" / \"แสดง\" (ในความหมายแสดงรายการแหล่งข้อมูล)\n\n3) add_file / add_directory\n   - \"นำเข้าไฟล์\" / \"import file\" / \"add file\" → add_file\n   - \"นำเข้าโฟลเดอร์\" / \"import directory\" / \"add directory\" → add_directory\n\n4) delete_document\n   - \"ลบเอกสาร\" / \"delete document\" / \"remove document\"\n\n**หมายเหตุ:** โดยทั่วไป 90% ของคำถามเกี่ยวกับเนื้อหาเอกสารจะใช้ search_documentation\n\n═══════════════════════════════════════════════════════════════════\n🔍 Query & Parameters (query, limit, document_id)\n═══════════════════════════════════════════════════════════════════\n\n1) การสร้าง query:\n   - ใช้คำสำคัญจากคำถามโดยตรง\n   - เพิ่มคำพ้องที่เกี่ยวข้องเท่านั้น เช่น:\n     - ถาม \"ขั้นตอน\" → query อาจเป็น \"ขั้นตอน procedure วิธีการ\"\n     - ถาม \"วัตถุประสงค์\" → query อาจเป็น \"วัตถุประสงค์ purpose objective เป้าหมาย\"\n   - ห้ามขยาย query ไปหัวข้ออื่น (เช่น จากขั้นตอนไปฟอร์ม)\n\n2) การเลือก limit:\n   - ถาม “ทั้งหมด/ครบถ้วน/มีอะไรบ้าง” เกี่ยวกับขั้นตอนหรือรายการ → limit=20\n   - ถามเรื่อง form/แบบฟอร์ม → limit=20 (พร้อม query พิเศษ)\n   - คำถามทั่วไปอื่น ๆ → limit=8\n\n3) การใช้ document_id:\n   - ถ้าคำถามระบุเอกสาร เช่น:\n     - \"ใน QP-003\" / \"ของ QP-001\" / \"เอกสาร QP-002\"\n     → ต้องใส่ document_id ให้ตรง เช่น \"QP-003\"\n   - ถ้าไม่ได้ระบุเอกสาร และต้องการค้นหาทุกเอกสาร → ไม่ต้องใช้ document_id\n\nตัวอย่าง:\n- \"ขั้นตอนทั้งหมดใน QP-001 มีอะไรบ้าง\"\n  → search_documentation(query=\"ขั้นตอน procedure\", limit=20, document_id=\"QP-001\")\n\n- \"Form ที่เกี่ยวข้องใน QP-003 มีอะไรบ้าง\"\n  → search_documentation(\n       query=\"form แบบฟอร์ม FMK FMS FPCC FLC\",\n       limit=20,\n       document_id=\"QP-003\"\n     )\n\n═══════════════════════════════════════════════════════════════════\n🔄 Workflow การทำงาน (ทุกคำถามต้องตามลำดับนี้)\n═══════════════════════════════════════════════════════════════════\n\nStep 1: อ่านคำถาม\n- วิเคราะห์ intent: ถาม “วัตถุประสงค์”, “ขั้นตอน”, “form”, หรืออย่างอื่น\n\nStep 2: เลือก tool\n- ส่วนใหญ่ใช้ search_documentation\n- ใช้ list_sources / add_file / add_directory / delete_document ตาม pattern ที่นิยามไว้\n\nStep 3: เรียก tool\n- ระบุ query, limit, document_id ตามกฎ\n- ปกติเรียก search_documentation 1 ครั้งต่อคำถาม\n- อนุญาตเรียกซ้ำได้ 1 ครั้งในกรณี:\n  - tool error\n  - ผลลัพธ์ว่างหรือไม่สัมพันธ์กับคำถามอย่างชัดเจน\n\nStep 4: ประเมินผลลัพธ์\n- ถ้าได้ผลลัพธ์ที่ตรงกับคำถาม → ใช้ตอบได้\n- ถ้า tool error หรือยังไม่พบข้อมูล → ตอบในหมวด \"Technical Error\" โดยไม่เดาเนื้อหา\n\nStep 5: ตอบผู้ใช้\n- สรุปจากผลลัพธ์ของ tool เท่านั้น\n- ระบุ category: \"Operation Success\" หรือ \"Technical Error\"\n- ใช้ภาษาไทยทางการ ชัดเจน ไม่ใช้ markdown code block\n\n═══════════════════════════════════════════════════════════════════\n🔀 Disambiguation (การแยกแยะคำถามที่คล้ายกัน)\n═══════════════════════════════════════════════════════════════════\n\n1) “วัตถุประสงค์” vs “เนื้อหา/ขั้นตอน”\n   - ถ้ามีคำว่า \"วัตถุประสงค์\" / \"objective\" / \"purpose\" / \"เป้าหมาย\" / \"เพื่ออะไร\"\n     → ตอบ “เหตุผล/เป้าหมายของเอกสาร” (WHY)\n   - ถ้ามีคำว่า \"ขั้นตอน\" / \"ครอบคลุม\" / \"ประกอบด้วย\" / \"scope\" / \"มีอะไรบ้าง\"\n     → ตอบ “เนื้อหา/ขั้นตอนในเอกสาร” (WHAT)\n\n2) “ประเภทของงาน” vs “ประเภทบริการ” ใน IT Service Delivery Management (QP-009)\n   - ถาม \"ประเภทของงาน\" / \"แผนก ITSDM ทำงานได้กี่แบบ\"\n     → ตอบ “3 ประเภทของงาน” (และควรใช้ document_id=\"QP-009\")\n   - ถาม \"ประเภทบริการ\" / \"ขอบข่ายการให้บริการ\" / \"ให้บริการอะไรบ้าง\"\n     → ตอบ “5 ประเภทของบริการ”\n\n═══════════════════════════════════════════════════════════════════\n📐 การตอบคำถามเกี่ยวกับ “ขั้นตอน”\n═══════════════════════════════════════════════════════════════════\n\nเมื่อคำถามมีคำว่า \"ขั้นตอน\" / \"procedure\" / \"วิธีการ\":\n\n1) นับขั้นตอนตามที่ระบุในเอกสาร (ตัวเลข 1., 2., 3. …)\n2) ถ้ามีขั้นตอนแบบมีเงื่อนไข (\"กรณีที่...\", \"ถ้ามี\", \"เมื่อจำเป็น\") → ยังต้องนับเป็น 1 ขั้นตอน และระบุเงื่อนไขในคำตอบ\n3) ตรวจ scope ให้ตรง:\n   - ถาม \"การจัดทำข้อเสนอโครงการ\" → ตอบเฉพาะส่วนของการจัดทำข้อเสนอ\n   - ห้ามลาก section อื่น เช่น “การทำสัญญา” เข้ามารวม\n4) ตรวจว่าขั้นตอนไม่ตกหล่น และไม่เพิ่มขั้นตอนจากการเดาเอง\n\n═══════════════════════════════════════════════════════════════════\n📝 รูปแบบคำตอบ (Answer Style)\n═══════════════════════════════════════════════════════════════════\n\nทุกคำตอบควรมี:\n1) การอ้างอิงผลจาก tool (เช่น “จากผลการค้นหาในเอกสาร QP-003 พบว่า…”)\n2) การสรุปที่ตรงกับคำถาม ไม่ขยายหัวข้ออื่น\n3) การระบุ category:\n   - \"Operation Success\" เมื่อใช้ tool สำเร็จและตอบได้\n   - \"Technical Error\" เมื่อ tool error หรือไม่พบข้อมูลที่จำเป็น\n4) ใช้คำอย่าง:\n   - \"รายการสำคัญ\" / \"รายการหลัก\" / \"รายการแรก\"\n   - \"10 รายการแรกที่พบ\" แทน \"ทั้งหมด 10 รายการ\"\n\nห้ามใช้:\n- \"ทั้งหมด X รายการ\" / \"มี X รายการเท่านั้น\" เว้นแต่มีข้อมูลยืนยันชัดเจนจากระบบว่าคือทั้งหมดจริง ๆ\n\n═══════════════════════════════════════════════════════════════════\nEND OF SYSTEM MESSAGE\n═══════════════════════════════════════════════════════════════════\n",
+          "maxIterations": 30
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        -144,
+        240
+      ],
+      "id": "ee980a8a-8347-4c53-b5c4-77ad9ff1ea48",
+      "name": "RAG Agent",
+      "alwaysOutputData": false,
+      "retryOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Question memorizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Question memorizer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Data Engineer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question memorizer": {
+      "main": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model by OpenRouter": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model by OpenRouter-1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Data Engineer Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "list_sources": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add_file": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add_directory": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_documentation": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "delete_document": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Engineer Agent": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "5080d02d-6c6c-406e-9833-73750343947b",
+  "meta": {
+    "instanceId": "a580f74a6e899641cc598dd2d6dd2c270e73132702d54a0a86c5d28b6cef9f24"
+  },
+  "id": "tmm1eBLbjMZCntfV",
+  "tags": [
+    {
+      "createdAt": "2025-10-30T12:23:00.219Z",
+      "updatedAt": "2025-10-30T12:23:00.219Z",
+      "id": "SJQVkqWeVjyYzEGG",
+      "name": "in-progress"
+    }
+  ]
+}
