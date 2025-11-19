@@ -108,6 +108,29 @@ async def health_check():
         "transport": "sse"
     }
 
+# 🔎 DEBUG: ลองเรียก storage_service.list_sources() ดูตรง ๆ
+@app.get("/debug/list_sources")
+async def debug_list_sources():
+    """
+    Debug endpoint: ใช้ตรวจว่า storage_service.list_sources() ทำงานปกติไหม
+    """
+    try:
+        if storage_service is None:
+            return {"status": "error", "error": "storage_service is None"}
+
+        sources = await storage_service.list_sources()
+        return {
+            "status": "ok",
+            "total": len(sources),
+            "sources": sources,
+        }
+    except Exception as e:
+        logger.error("Error in debug_list_sources", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+        }
+
 # Root endpoint
 @app.get("/")
 async def root():
