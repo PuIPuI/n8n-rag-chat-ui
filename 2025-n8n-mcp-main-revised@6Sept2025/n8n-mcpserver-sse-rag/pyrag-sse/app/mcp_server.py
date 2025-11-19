@@ -86,14 +86,14 @@ async def add_documentation(url: str) -> str:
 @mcp_server.tool()
 async def search_documentation(
     query: str,
-    limit: int = 5,
+    limit: int = 10,
     document_id: str = None
 ) -> str:
     """Search through stored documentation with optional filtering
 
     Args:
         query: Search query
-        limit: Maximum number of results to return (default: 5)
+        limit: Maximum number of results to return (default: 10)
         document_id: Optional document ID to filter by (e.g., "QP-003", "QP-001")
     """
     try:
